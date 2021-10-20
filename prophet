@@ -1,3 +1,5 @@
+#install libraries
+
 from fbprophet.plot import plot_plotly
 import matplotlib.pyplot as plt
 import numpy as np
@@ -12,6 +14,8 @@ warnings.filterwarnings('ignore')
 
 def mean_absolute_percentage_error(y_true, y_pred): 
     return np.mean(np.abs((y_true - y_pred) / y_true)) * 100
+
+#read files
 
 train=pd.read_csv('C:/Users/riard/Downloads/train.csv')
 test=pd.read_csv("C:/Users/riard/Downloads/test.csv")
