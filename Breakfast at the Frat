@@ -1,0 +1,184 @@
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+import numpy as np
+from sklearn.model_selection import TimeSeriesSplit
+from sklearn import linear_model
+
+breakfast = pd.ExcelFile("C:/Users/riard/Downloads/dunnhumby _Breakfast-at-the-Frat/dunnhumby - Breakfast at the Frat.xlsx")                     
+
+stores = breakfast.parse (sheet_name=1,header=1,usecols=range(9))
+products = breakfast.parse (sheet_name=2,header=1, usecols=range(6))
+transaction = breakfast.parse (sheet_name=3,header=1,usecols=range(12))
+
+products.head(3)
+products.info() 
+
+products.UPC.nunique(), products.columns
+print( products.DESCRIPTION.unique().shape)
+products.DESCRIPTION.unique()
+
+plt.title('Distribution of product categories')
+products.CATEGORY.value_counts().plot(kind='barh')
+
+products.SUB_CATEGORY.value_counts().plot(kind='barh')
+
+products.groupby('CATEGORY')['MANUFACTURER'].value_counts()
+
+
+stores.columns
+stores.info()
+
+stores.STORE_ID.value_counts()
+
+stores.STORE_NAME.value_counts()
+
+stores.ADDRESS_CITY_NAME.value_counts()
+
+stores.MSA_CODE.unique()
+
+(stores.MSA_CODE.value_counts()/stores.shape[0]).plot(kind='barh')
+
+
+stores.ADDRESS_STATE_PROV_CODE.value_counts().plot(kind='barh')
+
+stores.SEG_VALUE_NAME.value_counts().plot(kind='barh')
+
+stores[['PARKING_SPACE_QTY']].describe()
+
+stores.SALES_AREA_SIZE_NUM.describe()
+
+stores.SALES_AREA_SIZE_NUM.hist()
+
+stores.AVG_WEEKLY_BASKETS.describe()
+
+stores.AVG_WEEKLY_BASKETS.hist()
+
+fig, axes=plt.subplots(1,2,figsize=(16,6))
+sns.boxplot(x="SEG_VALUE_NAME", y="AVG_WEEKLY_BASKETS", data=stores, ax=axes[0])
+sns.boxplot(x="SEG_VALUE_NAME", y="SALES_AREA_SIZE_NUM", data=stores, ax=axes[1])
+
+def reomove_outlier_IQR(df):
+    Q1=df.quantile(0.25)
+    Q3=df.quantile(0.75)
+    IQR= Q3-Q1
+    df_final=df[~((df<(Q1-1.5*IQR)) | (df>(Q3+1.5*IQR)))]
+    return df_final
+    
+def Cleanse_Outliers(AVG_WEEKLY_BASKETS,SEG_VALUE_NAME):
+    for locs in SEG_VALUE_NAME:
+                    SEG_VALUE_NAME = transaction.shape
+transaction.rename(columns={'STORE_NUM': 'STORE_ID'}, inplace=True)
+
+trans_new=transaction.merge(products, on='UPC').merge(stores, how='outer', on='STORE_ID')
+trans_new.shape
+
+sortedWED=transaction.WEEK_END_DATE.value_counts(sort=False).reset_index().sort_values('index').set_index('index')
+sortedWED.plot()
+
+strore = pd.ExcelFile (breakfast, sheet_name='dh Store Lookup', header=1)
+store.head()
+
+print( transaction.UNITS.nunique() )
+transaction.UNITS.hist(range=(0,100))
+
+transaction.VISITS.hist(range=(0,100))
+
+transaction[['UNITS','VISITS','HHS']].corr()
+
+f, (ax1,ax2) = plt.subplots(1, 2,figsize=(15,6))
+transaction.PRICE.hist(bins=20,ax=ax1) 
+ax1.set_title('Price')
+transaction.BASE_PRICE.hist(bins=20, ax=ax2) 
+ax2.set_title('Base Price')
+
+
+transaction[['PRICE','BASE_PRICE']].corr()
+
+fig=plt.figure(figsize=(8,8))
+plt.scatter(transaction.UNITS, transaction.SPEND,marker='+')
+plt.xlabel('units sold')
+plt.ylabel('spend')
+plt.title('units vs spend')
+plt.show()
+
+current_dir = Path.cwd()
+proj_path = current_dir.parent.parent
+
+import sys
+sys.path.append(os.path.join(proj_path,'src'))
+
+with open(os.path.join(proj_path, 'conf/catalog.yml'), "r") as f:
+    catalog = yaml.safe_load(f)['breakfast']
+    
+with open(os.path.join(proj_path, 'conf/params.yml'), "r") as f:
+    params = yaml.safe_load(f)
+    
+create_folder(os.path.join(proj_path, 'mlruns'))
+merged_data = pd.read_csv(os.path.join(proj_path, 
+                                       catalog['output_dir']['dir'], 
+                                       catalog['output_dir']['merged']))
+merged_data['WEEK_END_DATE'] = pd.to_datetime(merged_data['WEEK_END_DATE'])
+merged_data['WEEK_END_DATE'] = merged_data['WEEK_END_DATE'] + timedelta(days=3)
+
+date_ranges = make_dates(params['breakfast']['experiment_dates'])
+
+stores = list(params['breakfast']['dataset']['store_ids'].keys())
+upcs = list(params['breakfast']['dataset']['upc_ids'].keys())
+store_upc_pairs = list(itertools.product(stores, upcs))
+
+for store_id, upc_id in store_upc_pairs: 
+    print(f'Processing store {store_id} upc {upc_id}')
+    mlflow.set_tracking_uri(os.path.join('../../','mlruns'))
+    mlflow.set_experiment(f'{store_id}_{upc_id}')
+    
+mlflow.runName = 'prophet_' + str(datetime.today())[:19]
+ 
+for _, train_start, train_end, valid_start, valid_end, test_start, test_end in date_ranges.itertuples():
+     print(f'Processing range {str(train_start.date())} to {str(test_end.date())}')
+
+train_x = merged_data[(merged_data['WEEK_END_DATE']>=train_start) &
+                                  (merged_data['WEEK_END_DATE']<=valid_end) &
+                                  (merged_data['STORE_NUM']==store_id) &
+                                  (merged_data['UPC']==upc_id)][['WEEK_END_DATE','UNITS']]
+ 
+test_y = merged_data[(merged_data['WEEK_END_DATE']>=test_start) &
+                             (merged_data['WEEK_END_DATE']<=test_end) &
+                             (merged_data['STORE_NUM']==store_id) &
+                             (merged_data['UPC']==upc_id)][['WEEK_END_DATE','UNITS']]
+
+train_x = train_x.rename(columns={'WEEK_END_DATE':'ds', 'UNITS':'y'})
+test_y = test_y.rename(columns={'WEEK_END_DATE':'ds', 'UNITS':'y'})
+
+predictions = []
+for i in range(test_y.shape[0]):
+
+    model = Prophet(weekly_seasonality=True,
+                    yearly_seasonality=True,
+                    daily_seasonality=False)
+
+model.add_country_holidays(country_name='US')
+
+model.fit(pd.concat([train_x.iloc[i:], test_y.iloc[:i]]))
+future = model.make_future_dataframe(periods=1, freq='7D')
+fcst = model.predict(future)['yhat'].iloc[-1]
+predictions.append(fcst)
+            
+run_metrics = get_metrics(test_y['y'].values, predictions)
+        
+ 
+fdir = os.path.join(proj_path, catalog['results']['dir'], f'{str(test_end.date())}')
+fname = os.path.join(fdir, f'prophet_{store_id}_{upc_id}.csv')
+create_folder(fdir)
+
+test_y['preds'] = predictions
+ 
+test_y.to_csv(fname)
+
+with mlflow.start_run():
+        
+ mlflow.log_artifact(fname)
+ mlflow.log_param('model','prophet')
+ mlflow.log_metrics(run_metrics)
+    
+    
