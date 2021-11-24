@@ -26,9 +26,9 @@ a=df_train.loc[(df_train['store'] == 1) & (df_train['item'] == 1)].reset_index()
 
 tic = time.time()
 
-for s in proph_results['store'].unique()':'
+for s in proph_results['store'].unique():
 
-    for i in proph_results['item'].unique()':'
+    for i in proph_results['item'].unique():
         proph_train = df_train.loc[(df_train['store'] == s) & (df_train['item'] == i)].reset_index()
         proph_train.rename(columns={'date', 'ds', 'sales', 'y'}, inplace=True)
         
@@ -41,7 +41,7 @@ for s in proph_results['store'].unique()':'
         
         toc = time.time()
         if i % 10 == 0:
-            print("Completed store {} item {}. Cumulative time: {:.1f}s".format(s, i, toc-tic))
+            print(" Completed store {} item {} Cumulative time: {:.1f}s".format(s, i, toc-tic))
             
 proph_results.drop(['date', 'store', 'item'], axis=1, inplace=True)
 proph_results.head()
