@@ -22,10 +22,122 @@ test = pd.read_csv("C:/Users/riard/Downloads/test.csv", parse_dates=['date'])
 df = pd.concat([train, test], sort=False) 
 df.head()
 
-print("Train size of set:",train.shape)
-print("Test size of set: ,test.shape)
 
+print(train.shape)
+print(test.shape)
 df.shape
 
+df.quantile([0, 0.05, 0.25, 0.50, 0.75, 0.95, 0.99, 1]).T
 
+df["date"].min()
+
+df["date"].max()
+
+# Distribución de ventas
+df["sales"].describe([0.10, 0.30, 0.50, 0.70, 0.80, 0.90, 0.95, 0.99])
+
+# Número de tiendas
+df["store"].nunique()
+
+#Número de productos
+df["item"].nunique() 
+
+# ¿Existe el mismo número de artículos únicos en cada tienda?
+df.groupby(["store"])["item"].nunique()
+
+# Estadísticas de ventas en el desglose de tienda-producto
+df.groupby(["store", "item"]).agg({"sales": ["sum", "mean", "median", "std"]})
+
+# en qué mes se realizó la venta
+df['month'] = df.date.dt.month
+
+# en qué día del mes se realizó la venta
+df['day_of_month'] = df.date.dt.day
+
+# en qué día del año se realizó la venta
+df['day_of_year'] = df.date.dt.dayofyear 
+
+# en qué semana del año se realizó la venta
+df['week_of_year'] = df.date.dt.weekofyear
+
+# en qué día de la semana se realizó la venta
+df['day_of_week'] = df.date.dt.dayofweek
+
+# en qué año se realizó la venta
+df['year'] = df.date.dt.year
+
+# fin de semana o no
+df["is_wknd"] = df.date.dt.weekday // 4
+
+# ¿es el comienzo del mes?
+df['is_month_start'] = df.date.dt.is_month_start.astype(int)
+
+# ¿Es fin de mes?
+df['is_month_end'] = df.date.dt.is_month_end.astype(int) 
+
+df.head()
+
+#desglose de artículos de la tienda por mes
+df.groupby(["store", "item", "month"]).agg({"sales": ["sum", "mean", "median", "std"]})
+
+# random noise
+def random_noise(dataframe):
+    return np.random.normal(scale=1.6, size=(len(dataframe),))
+
+# lag
+df.sort_values(by=['store', 'item', 'date'], axis=0, inplace=True)
+df.head()
+
+def lag_features(dataframe, lags):
+    for lag in lags:
+        dataframe['sales_lag_' + str(lag)] = dataframe.groupby(["store", "item"])['sales'].transform(
+            lambda x: x.shift(lag)) + random_noise(dataframe)
+    return dataframe
+
+df = lag_features(df, [91, 98, 105, 112, 119, 126, 182, 364, 546, 728])
+
+#Rolling Mean Features 
+def roll_mean_features(dataframe, windows):
+    for window in windows:
+        dataframe['sales_roll_mean_' + str(window)] = dataframe.groupby(["store", "item"])['sales']. \
+                                                          transform(
+            lambda x: x.shift(1).rolling(window=window, min_periods=10, win_type="triang").mean()) + random_noise(
+            dataframe)
+    return dataframe
+
+
+df = roll_mean_features(df, [365, 546, 730])
+
+# Exponentially Weighted Mean Features
+
+def ewm_features(dataframe, alphas, lags):
+    for alpha in alphas:
+        for lag in lags:
+            dataframe['sales_ewm_alpha_' + str(alpha).replace(".", "") + "_lag_" + str(lag)] = \
+                dataframe.groupby(["store", "item"])['sales'].transform(lambda x: x.shift(lag).ewm(alpha=alpha).mean())
+    return dataframe
+
+
+alphas = [0.99, 0.95, 0.9, 0.8, 0.7, 0.5]
+lags = [91, 98, 105, 112, 180, 270, 365, 546, 728]
+
+df = ewm_features(df, alphas, lags)
+df.tail()
+
+df = pd.get_dummies(df, columns=['day_of_week', 'month'])
+
+#Converting sales to log(1+sales)
+
+df['sales'] = np.log1p(df["sales"].values)
+
+#LGBM 
+# Tren establecido hasta principios de 2017 (hasta finales de 2016).
+
+train = df.loc[(df["date"] < "2017-01-01"), :]
+
+#validación de los primeros 3 meses de 2017
+val = df.loc[(df["date"] >= "2017-01-01") & (df["date"] < "2017-04-01"), :]
+
+# Variables independientes
+cols = [col for col in train.columns if col not in ['date', 'id', "sales", "year"]]
 
